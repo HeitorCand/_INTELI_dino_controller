@@ -3,11 +3,16 @@ import librosa
 
 SR = 16000
 N_MFCC = 11
-FEATURE_DIM = 1 + 1 + N_MFCC  # RMS + spectral centroid + MFCC means
+FEATURE_DIM = 1 + 1 + 1 + N_MFCC  # RMS + ZCR + spectral centroid + MFCC means
 
 
 def compute_rms(signal: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(signal))))
+
+
+def compute_zero_crossing_rate(signal: np.ndarray) -> float:
+    zcr = librosa.feature.zero_crossing_rate(y=signal)
+    return float(np.mean(zcr))
 
 
 def normalize_amplitude(signal: np.ndarray, target_peak: float = 0.5) -> np.ndarray:
@@ -33,7 +38,8 @@ def compute_mfcc_means(signal: np.ndarray, sr: int = SR, n_mfcc: int = N_MFCC) -
 
 def extract_features(signal: np.ndarray, sr: int = SR) -> np.ndarray:
     rms = compute_rms(signal)
+    zcr = compute_zero_crossing_rate(signal)
     shape_signal = normalize_amplitude(signal)
     centroid = compute_spectral_centroid(shape_signal, sr)
     mfcc_means = compute_mfcc_means(shape_signal, sr)
-    return np.concatenate([[rms], [centroid], mfcc_means]).astype(np.float32)
+    return np.concatenate([[rms], [zcr], [centroid], mfcc_means]).astype(np.float32)

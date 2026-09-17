@@ -1,6 +1,13 @@
 import numpy as np
 
-from training.features import compute_rms, extract_features, normalize_amplitude, FEATURE_DIM, SR
+from training.features import (
+    FEATURE_DIM,
+    SR,
+    compute_rms,
+    compute_zero_crossing_rate,
+    extract_features,
+    normalize_amplitude,
+)
 
 
 def test_rms_of_silence_is_zero():
@@ -55,5 +62,12 @@ def test_extract_features_spectral_shape_is_gain_invariant():
 
     # RMS (index 0) still reflects the real loudness difference...
     assert quiet_features[0] < loud_features[0]
-    # ...but spectral centroid and MFCCs (indices 1+) are gain-invariant.
+    # ...but ZCR, spectral centroid and MFCCs (indices 1+) are gain-invariant.
     np.testing.assert_allclose(quiet_features[1:], loud_features[1:], atol=1e-3)
+
+
+def test_compute_zero_crossing_rate_is_higher_for_higher_frequency():
+    t = np.linspace(0, 1, SR, endpoint=False)
+    low_freq = (0.5 * np.sin(2 * np.pi * 100 * t)).astype(np.float32)
+    high_freq = (0.5 * np.sin(2 * np.pi * 4000 * t)).astype(np.float32)
+    assert compute_zero_crossing_rate(low_freq) < compute_zero_crossing_rate(high_freq)
