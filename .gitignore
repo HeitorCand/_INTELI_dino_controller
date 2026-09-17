@@ -1,5 +1,6 @@
 training/data/raw/
 .venv/
+.superpowers
 __pycache__/
 *.pyc
 .pytest_cache/
