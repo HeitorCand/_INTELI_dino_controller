@@ -17,6 +17,13 @@ CLIP_DURATION = 1.0
 CLIP_LENGTH = int(SR * CLIP_DURATION)
 WINDOW_CHUNKS = int(CLIP_DURATION / CHUNK_DURATION)
 CONFIDENCE_THRESHOLD = 0.6
+CALIBRATION_DURATION = 1.0
+MIN_RMS_MULTIPLIER = 3.0
+MIN_RMS_FLOOR = 0.005
+
+
+def compute_rms(signal: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.square(signal))))
 
 
 def softmax(logits: np.ndarray) -> np.ndarray:
@@ -56,9 +63,26 @@ def format_probabilities(probabilities: np.ndarray) -> str:
     return ", ".join(f"{name}: {p * 100:.0f}%" for name, p in zip(CLASSES, probabilities))
 
 
+def calibrate_min_rms(duration: float = CALIBRATION_DURATION) -> float:
+    """Measures the room's ambient noise floor so near-silent windows can be skipped
+    without even running the model. True silence/quiet ambient noise is out of the
+    training distribution (every recording has *some* real sound in it) and the model
+    can extrapolate confidently wrong on it - this floor is a cheap safety net,
+    independent of the model, that catches that case directly."""
+    print(f"Calibrando ruído de fundo — fique em silêncio por {duration:.1f}s...")
+    samples = int(SR * duration)
+    recording = sd.rec(samples, samplerate=SR, channels=1, dtype="float32")
+    sd.wait()
+    ambient_rms = compute_rms(recording.flatten())
+    min_rms = max(ambient_rms * MIN_RMS_MULTIPLIER, MIN_RMS_FLOOR)
+    print(f"Ruído ambiente: {ambient_rms:.4f} | Piso mínimo para classificar: {min_rms:.4f}\n")
+    return min_rms
+
+
 def main():
     models_dir = Path(__file__).parent.parent / "models"
     session, mean, std = load_classifier(models_dir)
+    min_rms = calibrate_min_rms()
 
     audio_queue: "Queue[np.ndarray]" = Queue()
 
@@ -80,6 +104,9 @@ def main():
                     continue
 
                 signal = np.concatenate(window)
+                if compute_rms(signal) < min_rms:
+                    continue
+
                 _, probabilities = classify_clip(signal, session, mean, std)
                 decided_class = decide_class(probabilities)
 
