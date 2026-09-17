@@ -60,7 +60,7 @@ def test_build_features_with_augment_multiplies_rows_by_four(tmp_path):
     raw_dir = _make_raw_dir(tmp_path)
     signals, labels = load_raw_clips(raw_dir)
     X, _ = build_features(signals, labels, augment=True)
-    assert X.shape[0] == len(signals) * 4
+    assert X.shape[0] == len(signals) * 6
 
 
 def test_augmentation_does_not_leak_into_test_partition(tmp_path):
@@ -73,7 +73,7 @@ def test_augmentation_does_not_leak_into_test_partition(tmp_path):
     X_train, y_train = build_features(train_signals, train_labels, augment=True)
     X_test, y_test = build_features(test_signals, test_labels, augment=False)
 
-    assert X_train.shape[0] + X_test.shape[0] == len(train_signals) * 4 + len(test_signals)
+    assert X_train.shape[0] + X_test.shape[0] == len(train_signals) * 6 + len(test_signals)
     assert X_test.shape[0] == len(test_signals)
 
 
