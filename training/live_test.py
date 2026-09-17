@@ -22,6 +22,8 @@ PRE_ROLL_CHUNKS = int(PRE_ROLL_DURATION / CHUNK_DURATION)
 CALIBRATION_DURATION = 1.5
 THRESHOLD_MULTIPLIER = 2.5
 MIN_THRESHOLD = 0.005
+CONFIDENCE_THRESHOLD = 0.6
+MAX_COMMAND_DURATION = 1.2
 
 
 def compute_rms(signal: np.ndarray) -> float:
@@ -51,6 +53,21 @@ def classify_clip(
     probabilities = softmax(logits)
     predicted_class = CLASSES[int(np.argmax(probabilities))]
     return predicted_class, probabilities
+
+
+def decide_class(
+    probabilities: np.ndarray, capture_duration: float, hit_max_duration: bool
+) -> Tuple[str, str]:
+    """Applies duration- and confidence-based rejection on top of the raw model
+    prediction, so out-of-distribution input (normal conversation, anything the
+    model wasn't trained on) defaults to 'ruido' instead of a confidently wrong
+    guess. Returns (decided_class, reason); reason is "" when the model's own
+    prediction was accepted as-is."""
+    if hit_max_duration or capture_duration > MAX_COMMAND_DURATION:
+        return "ruido", "fala longa demais para ser um comando"
+    if float(np.max(probabilities)) < CONFIDENCE_THRESHOLD:
+        return "ruido", "baixa confiança"
+    return CLASSES[int(np.argmax(probabilities))], ""
 
 
 def calibrate_threshold(duration: float = CALIBRATION_DURATION) -> float:
@@ -112,9 +129,15 @@ def main():
                     silence_duration += CHUNK_DURATION
 
                 if silence_duration >= HANGOVER_DURATION or capture_duration >= MAX_CAPTURE_DURATION:
+                    hit_max_duration = capture_duration >= MAX_CAPTURE_DURATION
                     signal = np.concatenate(capture_chunks)
-                    predicted_class, probabilities = classify_clip(signal, session, mean, std)
-                    print(f">> {predicted_class.upper():8s} ({format_probabilities(probabilities)})")
+                    _, probabilities = classify_clip(signal, session, mean, std)
+                    decided_class, reason = decide_class(probabilities, capture_duration, hit_max_duration)
+                    suffix = f"  [{reason}]" if reason else ""
+                    print(
+                        f">> {decided_class.upper():8s} ({format_probabilities(probabilities)})"
+                        f"  dur={capture_duration:.2f}s{suffix}"
+                    )
 
                     capturing = False
                     capture_chunks = []
