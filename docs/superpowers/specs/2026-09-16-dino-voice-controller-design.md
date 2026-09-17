@@ -54,22 +54,43 @@ pois todas as tasks escrevem nele.
 
 ## Modelo de detecção
 
-- Features de entrada: RMS, Spectral Centroid, ~11 coeficientes MFCC (13 valores no
-  total).
-- Rede neural pequena (MLP: 13 → 16 → 3, softmax) treinada em Python a partir de áudios
-  gravados (microfone do notebook/celular) das palavras "pular", "abaixa" e trechos de
-  ruído de fundo/silêncio/outras falas.
+- Features de entrada (14 valores): RMS, Zero-Crossing Rate, Spectral Centroid e ~11
+  coeficientes MFCC — extraídos do clipe inteiro (pooling por segmento foi testado e
+  descartado, ver "Discussão" do relatório: piorou a acurácia com esse volume de dado).
+  Centroide e MFCC são calculados sobre o sinal normalizado por amplitude (pico
+  constante), tornando-os invariantes ao ganho do dispositivo de gravação; RMS é
+  calculado sobre o sinal bruto, de propósito, para preservar informação de volume
+  (distingue fala de ruído/silêncio).
+- Rede neural pequena (MLP: 14 → 16 → 3, softmax) treinada em Python, com seed fixa
+  (reprodutível).
 - Exportado como `.onnx` (entregável exigido).
 - Como o ESP32 (Arduino framework) não possui runtime ONNX embarcado simples, o
   forward-pass (poucas centenas de multiplicações) é portado manualmente para C como
   produto de matrizes, gerado a partir dos pesos do modelo treinado. O `.onnx` é o
   artefato de treino/documentação; o C gerado é o que roda de fato no dispositivo.
 
+### Fontes de dados
+
+- **Gravações próprias**: iPhone (Voice Memos) e microfone embutido do notebook
+  (`training/record_audio.py`), rotuladas com apoio de transcrição automática
+  (Whisper) e conferência manual.
+- **MLCommons Multilingual Spoken Words Corpus (MSWC)**: 113 clipes reais adicionais
+  ("pula"/"pular": 67 clipes, 33 falantes únicos; "abaixo" — variante mais próxima de
+  "abaixa" presente no corpus — 46 clipes, 17 falantes únicos), extraídos por alinhamento
+  forçado do Mozilla Common Voice PT-BR. Licença CC-BY 4.0 — atribuição obrigatória no
+  relatório. Fonte: https://mlcommons.org/datasets/multilingual-spoken-words/. Usado
+  especificamente para combater o viés de domínio de um único microfone (ver risco
+  abaixo): são gravações de dezenas de falantes/dispositivos diferentes.
+
 **Risco conhecido:** gravar com microfone do notebook/celular é mais rápido que gravar
 direto do INMP441, mas pode haver descasamento de domínio (timbre/ruído diferentes) na
-hora da inferência real no ESP32. Mitigação: validar a acurácia no dispositivo real assim
-que o firmware estiver de pé; se necessário, complementar o dataset com um lote de áudio
-capturado direto do INMP441 (sem precisar retreinar do zero).
+hora da inferência real no ESP32. Mitigação aplicada: normalização de ganho nas features,
+augmentation de ganho/deslocamento temporal, e inclusão de dados multi-falante do MSWC —
+todas reduziram, mas não eliminaram, um viés residual observado em testes ao vivo
+(confusão ocasional entre "pular"/"abaixa" fora do microfone de treino original).
+Mitigação pendente: validar a acurácia no dispositivo real assim que o firmware estiver
+de pé; se necessário, complementar o dataset com um lote de áudio capturado direto do
+INMP441 (sem precisar retreinar do zero).
 
 ## Testes
 
