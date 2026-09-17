@@ -3,6 +3,7 @@ import soundfile as sf
 
 from training.dataset import build_features, load_raw_clips, split_raw_clips
 from training.features import SR, FEATURE_DIM
+from training.train import evaluate_model, normalize_features, run_pipeline
 
 
 def _write_tone(path, freq, duration=1.0):
@@ -11,13 +12,13 @@ def _write_tone(path, freq, duration=1.0):
     sf.write(str(path), signal, SR)
 
 
-def _make_raw_dir(tmp_path):
+def _make_raw_dir(tmp_path, clips_per_class=3):
     raw_dir = tmp_path / "raw"
     freqs = {"ruido": 200.0, "pular": 440.0, "abaixa": 880.0}
     for class_name, freq in freqs.items():
         class_dir = raw_dir / class_name
         class_dir.mkdir(parents=True)
-        for i in range(3):
+        for i in range(clips_per_class):
             _write_tone(class_dir / f"clip_{i}.wav", freq)
     return raw_dir
 
@@ -74,3 +75,22 @@ def test_augmentation_does_not_leak_into_test_partition(tmp_path):
 
     assert X_train.shape[0] + X_test.shape[0] == len(train_signals) * 4 + len(test_signals)
     assert X_test.shape[0] == len(test_signals)
+
+
+def test_run_pipeline_evaluates_on_unaugmented_test_partition(tmp_path):
+    # Regression test for the augment-before-split bug: if run_pipeline ever went
+    # back to augmenting before splitting (or augmenting the test partition), the
+    # evaluation report it produces would be computed over a different (larger,
+    # augmented) test set than the one reconstructed here from split_raw_clips +
+    # build_features(..., augment=False), and the reports below would diverge.
+    raw_dir = _make_raw_dir(tmp_path, clips_per_class=5)
+
+    model, report, mean, std = run_pipeline(raw_dir)
+
+    signals, labels = load_raw_clips(raw_dir)
+    _, _, test_signals, test_labels = split_raw_clips(signals, labels)
+    X_test, y_test = build_features(test_signals, test_labels, augment=False)
+    X_test_norm = normalize_features(X_test, mean, std)
+    expected_report = evaluate_model(model, X_test_norm, y_test)
+
+    assert report == expected_report

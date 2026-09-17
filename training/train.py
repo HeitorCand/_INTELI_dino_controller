@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -34,6 +35,7 @@ def normalize_features(X: np.ndarray, mean: np.ndarray, std: np.ndarray) -> np.n
 def train_model(
     X_train: np.ndarray, y_train: np.ndarray, epochs: int = 200, lr: float = 0.01
 ) -> CommandClassifier:
+    torch.manual_seed(42)
     model = CommandClassifier()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
@@ -76,8 +78,9 @@ def export_onnx(model: CommandClassifier, output_path: Path) -> None:
     )
 
 
-def main():
-    raw_dir = Path(__file__).parent / "data" / "raw"
+def run_pipeline(raw_dir: Path) -> Tuple[CommandClassifier, str, np.ndarray, np.ndarray]:
+    """Runs the full load->split->augment->train->evaluate pipeline. Returns
+    (trained_model, evaluation_report_text, feature_mean, feature_std)."""
     signals, labels = load_raw_clips(raw_dir)
     train_signals, train_labels, test_signals, test_labels = split_raw_clips(signals, labels)
 
@@ -91,6 +94,12 @@ def main():
 
     model = train_model(X_train_norm, y_train)
     report = evaluate_model(model, X_test_norm, y_test)
+    return model, report, mean, std
+
+
+def main():
+    raw_dir = Path(__file__).parent / "data" / "raw"
+    model, report, mean, std = run_pipeline(raw_dir)
     print(report)
 
     models_dir = Path(__file__).parent.parent / "models"

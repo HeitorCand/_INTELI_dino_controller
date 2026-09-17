@@ -1,7 +1,9 @@
 import numpy as np
 import onnxruntime as ort
 import torch
+from sklearn.metrics import classification_report
 
+from training.dataset import CLASSES
 from training.features import FEATURE_DIM
 from training.train import (
     evaluate_model,
@@ -67,3 +69,19 @@ def test_evaluate_model_report_mentions_all_classes():
     assert "pular" in report
     assert "abaixa" in report
     assert "ruido" in report
+
+
+def test_evaluate_model_report_uses_class_names_not_numeric_labels():
+    X, y = _make_synthetic_dataset()
+    mean, std = X.mean(axis=0), X.std(axis=0) + 1e-8
+    X_norm = normalize_features(X, mean, std)
+    model = train_model(X_norm, y, epochs=200)
+
+    model.eval()
+    with torch.no_grad():
+        predictions = torch.argmax(model(torch.from_numpy(X_norm)), dim=1).numpy()
+
+    expected_report = classification_report(y, predictions, target_names=CLASSES, zero_division=0)
+    report = evaluate_model(model, X_norm, y)
+
+    assert expected_report in report

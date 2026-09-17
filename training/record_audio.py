@@ -4,10 +4,8 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
-from training.dataset import CLASSES
+from training.dataset import CLASSES, CLIP_DURATION_SEC
 from training.features import SR
-
-CLIP_DURATION_SEC = 1.0
 
 
 def record_clip(duration_sec: float = CLIP_DURATION_SEC, sr: int = SR) -> np.ndarray:
@@ -17,7 +15,11 @@ def record_clip(duration_sec: float = CLIP_DURATION_SEC, sr: int = SR) -> np.nda
 
 
 def next_clip_index(class_dir: Path) -> int:
-    return len(list(class_dir.glob("clip_*.wav")))
+    existing = list(class_dir.glob("clip_*.wav"))
+    if not existing:
+        return 0
+    indices = [int(p.stem.split("_")[1]) for p in existing]
+    return max(indices) + 1
 
 
 def save_clip(class_dir: Path, signal: np.ndarray, sr: int = SR) -> Path:
