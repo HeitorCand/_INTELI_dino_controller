@@ -1,0 +1,10 @@
+numpy
+scipy
+librosa
+soundfile
+sounddevice
+scikit-learn
+torch
+onnx
+onnxruntime
+pytest
