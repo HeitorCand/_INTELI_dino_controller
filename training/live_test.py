@@ -1,7 +1,7 @@
 from collections import deque
 from pathlib import Path
 from queue import Queue
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 import onnxruntime as ort
@@ -15,11 +15,15 @@ CHUNK_DURATION = 0.1
 CHUNK_SAMPLES = int(SR * CHUNK_DURATION)
 CLIP_DURATION = 1.0
 CLIP_LENGTH = int(SR * CLIP_DURATION)
-WINDOW_CHUNKS = int(CLIP_DURATION / CHUNK_DURATION)
+MAX_CAPTURE_DURATION = 1.5
+HANGOVER_DURATION = 0.3
+PRE_ROLL_DURATION = 0.2
+PRE_ROLL_CHUNKS = int(PRE_ROLL_DURATION / CHUNK_DURATION)
+CALIBRATION_DURATION = 1.5
+THRESHOLD_MULTIPLIER = 2.5
+MIN_THRESHOLD = 0.005
 CONFIDENCE_THRESHOLD = 0.6
-CALIBRATION_DURATION = 1.0
-MIN_RMS_MULTIPLIER = 3.0
-MIN_RMS_FLOOR = 0.005
+MAX_COMMAND_DURATION = 1.2
 
 
 def compute_rms(signal: np.ndarray) -> float:
@@ -51,47 +55,53 @@ def classify_clip(
     return predicted_class, probabilities
 
 
-def decide_class(probabilities: np.ndarray) -> str:
-    """Rejects to 'ruido' when the model isn't confident, instead of always taking
-    the argmax even when it's a close, unconvincing call."""
+def decide_class(
+    probabilities: np.ndarray, capture_duration: float, hit_max_duration: bool
+) -> Tuple[str, str]:
+    """Applies duration- and confidence-based rejection on top of the raw model
+    prediction, so out-of-distribution input (normal conversation, anything the
+    model wasn't trained on) defaults to 'ruido' instead of a confidently wrong
+    guess. Returns (decided_class, reason); reason is "" when the model's own
+    prediction was accepted as-is."""
+    if hit_max_duration or capture_duration > MAX_COMMAND_DURATION:
+        return "ruido", "fala longa demais para ser um comando"
     if float(np.max(probabilities)) < CONFIDENCE_THRESHOLD:
-        return "ruido"
-    return CLASSES[int(np.argmax(probabilities))]
+        return "ruido", "baixa confiança"
+    return CLASSES[int(np.argmax(probabilities))], ""
+
+
+def calibrate_threshold(duration: float = CALIBRATION_DURATION) -> float:
+    print(f"Calibrando ruído de fundo — fique em silêncio por {duration:.1f}s...")
+    samples = int(SR * duration)
+    recording = sd.rec(samples, samplerate=SR, channels=1, dtype="float32")
+    sd.wait()
+    ambient_rms = compute_rms(recording.flatten())
+    threshold = max(ambient_rms * THRESHOLD_MULTIPLIER, MIN_THRESHOLD)
+    print(f"Ruído ambiente: {ambient_rms:.4f} | Limiar de fala: {threshold:.4f}")
+    return threshold
 
 
 def format_probabilities(probabilities: np.ndarray) -> str:
     return ", ".join(f"{name}: {p * 100:.0f}%" for name, p in zip(CLASSES, probabilities))
 
 
-def calibrate_min_rms(duration: float = CALIBRATION_DURATION) -> float:
-    """Measures the room's ambient noise floor so near-silent windows can be skipped
-    without even running the model. True silence/quiet ambient noise is out of the
-    training distribution (every recording has *some* real sound in it) and the model
-    can extrapolate confidently wrong on it - this floor is a cheap safety net,
-    independent of the model, that catches that case directly."""
-    print(f"Calibrando ruído de fundo — fique em silêncio por {duration:.1f}s...")
-    samples = int(SR * duration)
-    recording = sd.rec(samples, samplerate=SR, channels=1, dtype="float32")
-    sd.wait()
-    ambient_rms = compute_rms(recording.flatten())
-    min_rms = max(ambient_rms * MIN_RMS_MULTIPLIER, MIN_RMS_FLOOR)
-    print(f"Ruído ambiente: {ambient_rms:.4f} | Piso mínimo para classificar: {min_rms:.4f}\n")
-    return min_rms
-
-
 def main():
     models_dir = Path(__file__).parent.parent / "models"
     session, mean, std = load_classifier(models_dir)
-    min_rms = calibrate_min_rms()
+    threshold = calibrate_threshold()
 
     audio_queue: "Queue[np.ndarray]" = Queue()
 
     def callback(indata, frames, time_info, status):
         audio_queue.put(indata[:, 0].copy())
 
-    print("Ouvindo continuamente... fale 'pular' ou 'abaixa' (Ctrl+C para sair)\n")
+    print("\nOuvindo... fale 'pular' ou 'abaixa' (Ctrl+C para sair)\n")
 
-    window: "deque[np.ndarray]" = deque(maxlen=WINDOW_CHUNKS)
+    capturing = False
+    capture_chunks: List[np.ndarray] = []
+    capture_duration = 0.0
+    silence_duration = 0.0
+    pre_roll: "deque[np.ndarray]" = deque(maxlen=PRE_ROLL_CHUNKS)
 
     with sd.InputStream(
         samplerate=SR, channels=1, blocksize=CHUNK_SAMPLES, callback=callback, dtype="float32"
@@ -99,23 +109,39 @@ def main():
         try:
             while True:
                 chunk = audio_queue.get()
-                window.append(chunk)
-                if len(window) < WINDOW_CHUNKS:
+                chunk_rms = compute_rms(chunk)
+
+                if not capturing:
+                    if chunk_rms > threshold:
+                        capturing = True
+                        capture_chunks = list(pre_roll) + [chunk]
+                        capture_duration = len(capture_chunks) * CHUNK_DURATION
+                        silence_duration = 0.0
+                    else:
+                        pre_roll.append(chunk)
                     continue
 
-                signal = np.concatenate(window)
-                if compute_rms(signal) < min_rms:
-                    continue
+                capture_chunks.append(chunk)
+                capture_duration += CHUNK_DURATION
+                if chunk_rms > threshold:
+                    silence_duration = 0.0
+                else:
+                    silence_duration += CHUNK_DURATION
 
-                _, probabilities = classify_clip(signal, session, mean, std)
-                decided_class = decide_class(probabilities)
+                if silence_duration >= HANGOVER_DURATION or capture_duration >= MAX_CAPTURE_DURATION:
+                    hit_max_duration = capture_duration >= MAX_CAPTURE_DURATION
+                    signal = np.concatenate(capture_chunks)
+                    _, probabilities = classify_clip(signal, session, mean, std)
+                    decided_class, reason = decide_class(probabilities, capture_duration, hit_max_duration)
+                    suffix = f"  [{reason}]" if reason else ""
+                    print(
+                        f">> {decided_class.upper():8s} ({format_probabilities(probabilities)})"
+                        f"  dur={capture_duration:.2f}s{suffix}"
+                    )
 
-                if decided_class != "ruido":
-                    print(f">> {decided_class.upper():8s} ({format_probabilities(probabilities)})")
-                    # Debounce: drop the window so the same utterance doesn't fire
-                    # again on the next slide; classification pauses until it
-                    # refills with a full second of fresh audio.
-                    window.clear()
+                    capturing = False
+                    capture_chunks = []
+                    pre_roll.clear()
         except KeyboardInterrupt:
             print("\nEncerrando.")
 
