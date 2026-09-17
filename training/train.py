@@ -5,7 +5,7 @@ import torch
 from sklearn.metrics import classification_report, confusion_matrix
 from torch import nn
 
-from training.dataset import CLASSES, build_dataset, split_dataset
+from training.dataset import CLASSES, build_features, load_raw_clips, split_raw_clips
 from training.features import FEATURE_DIM
 
 HIDDEN_DIM = 16
@@ -78,8 +78,11 @@ def export_onnx(model: CommandClassifier, output_path: Path) -> None:
 
 def main():
     raw_dir = Path(__file__).parent / "data" / "raw"
-    X, y = build_dataset(raw_dir, augment=True)
-    X_train, X_test, y_train, y_test = split_dataset(X, y)
+    signals, labels = load_raw_clips(raw_dir)
+    train_signals, train_labels, test_signals, test_labels = split_raw_clips(signals, labels)
+
+    X_train, y_train = build_features(train_signals, train_labels, augment=True)
+    X_test, y_test = build_features(test_signals, test_labels, augment=False)
 
     mean = X_train.mean(axis=0)
     std = X_train.std(axis=0) + 1e-8

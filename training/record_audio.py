@@ -4,9 +4,9 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
+from training.dataset import CLASSES
 from training.features import SR
 
-CLASSES = ["ruido", "pular", "abaixa"]
 CLIP_DURATION_SEC = 1.0
 
 
