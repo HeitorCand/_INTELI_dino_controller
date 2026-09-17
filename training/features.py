@@ -10,6 +10,17 @@ def compute_rms(signal: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(signal))))
 
 
+def normalize_amplitude(signal: np.ndarray, target_peak: float = 0.5) -> np.ndarray:
+    """Peak-normalizes a signal so spectral-shape features (centroid, MFCC) reflect
+    the sound's shape rather than the recording device's absolute gain. RMS is
+    deliberately computed on the raw (non-normalized) signal elsewhere, since it is
+    the one feature meant to carry loudness information (speech vs. quiet/ruido)."""
+    peak = float(np.max(np.abs(signal)))
+    if peak < 1e-6:
+        return signal
+    return (signal / peak * target_peak).astype(np.float32)
+
+
 def compute_spectral_centroid(signal: np.ndarray, sr: int = SR) -> float:
     centroid = librosa.feature.spectral_centroid(y=signal, sr=sr)
     return float(np.mean(centroid))
@@ -22,6 +33,7 @@ def compute_mfcc_means(signal: np.ndarray, sr: int = SR, n_mfcc: int = N_MFCC) -
 
 def extract_features(signal: np.ndarray, sr: int = SR) -> np.ndarray:
     rms = compute_rms(signal)
-    centroid = compute_spectral_centroid(signal, sr)
-    mfcc_means = compute_mfcc_means(signal, sr)
+    shape_signal = normalize_amplitude(signal)
+    centroid = compute_spectral_centroid(shape_signal, sr)
+    mfcc_means = compute_mfcc_means(shape_signal, sr)
     return np.concatenate([[rms], [centroid], mfcc_means]).astype(np.float32)

@@ -1,6 +1,6 @@
 import numpy as np
 
-from training.features import compute_rms, extract_features, FEATURE_DIM, SR
+from training.features import compute_rms, extract_features, normalize_amplitude, FEATURE_DIM, SR
 
 
 def test_rms_of_silence_is_zero():
@@ -31,3 +31,29 @@ def test_extract_features_silence_has_lower_rms_than_tone():
     silence_features = extract_features(silence)
     tone_features = extract_features(tone)
     assert silence_features[0] < tone_features[0]
+
+
+def test_normalize_amplitude_scales_peak_to_target():
+    t = np.linspace(0, 1, SR, endpoint=False)
+    signal = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    normalized = normalize_amplitude(signal, target_peak=0.5)
+    assert abs(np.max(np.abs(normalized)) - 0.5) < 1e-4
+
+
+def test_normalize_amplitude_leaves_silence_unchanged():
+    silence = np.zeros(SR, dtype=np.float32)
+    assert np.array_equal(normalize_amplitude(silence), silence)
+
+
+def test_extract_features_spectral_shape_is_gain_invariant():
+    t = np.linspace(0, 1, SR, endpoint=False)
+    quiet_tone = (0.02 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    loud_tone = (0.4 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+
+    quiet_features = extract_features(quiet_tone)
+    loud_features = extract_features(loud_tone)
+
+    # RMS (index 0) still reflects the real loudness difference...
+    assert quiet_features[0] < loud_features[0]
+    # ...but spectral centroid and MFCCs (indices 1+) are gain-invariant.
+    np.testing.assert_allclose(quiet_features[1:], loud_features[1:], atol=1e-3)
