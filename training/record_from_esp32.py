@@ -26,12 +26,31 @@ def parse_clip_response(header: bytes, raw_bytes: bytes) -> np.ndarray:
     return (int16_samples.astype(np.float32) / 32768.0).astype(np.float32)
 
 
+def read_until_magic(ser, magic: bytes = MAGIC, max_scan_bytes: int = 8192) -> None:
+    """Reads and discards bytes until the magic marker is found, so leftover
+    boot-time noise (the ESP32 ROM bootloader prints diagnostics at a
+    different baud rate right after reset, which can show up as garbage on
+    the line) doesn't get mistaken for the real response header."""
+    window = bytearray()
+    scanned = 0
+    while scanned < max_scan_bytes:
+        byte = ser.read(1)
+        if not byte:
+            raise TimeoutError("tempo esgotado esperando o marcador REC1 do ESP32")
+        window += byte
+        scanned += 1
+        if len(window) > len(magic):
+            del window[0]
+        if bytes(window) == magic:
+            return
+    raise ValueError(f"marcador {magic!r} não encontrado em {max_scan_bytes} bytes")
+
+
 def capture_one_clip(ser) -> np.ndarray:
-    ser.reset_input_buffer()
     ser.write(TRIGGER_BYTE)
-    header = ser.read(4)
+    read_until_magic(ser)
     raw_bytes = ser.read(CLIP_LENGTH * 2)
-    return parse_clip_response(header, raw_bytes)
+    return parse_clip_response(MAGIC, raw_bytes)
 
 
 def main():
