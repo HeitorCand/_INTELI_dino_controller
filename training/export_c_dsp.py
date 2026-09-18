@@ -44,7 +44,7 @@ def generate_header() -> str:
 
 def main():
     repo_root = Path(__file__).parent.parent
-    out_path = repo_root / "firmware" / "dsp_tables.h"
+    out_path = repo_root / "firmware" / "dino_voice_controller" / "dsp_tables.h"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(generate_header())
     print(f"Escrito: {out_path}")

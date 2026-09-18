@@ -54,7 +54,7 @@ def main():
     models_dir = repo_root / "models"
     header = generate_header(models_dir)
 
-    out_path = repo_root / "firmware" / "model_weights.h"
+    out_path = repo_root / "firmware" / "dino_voice_controller" / "model_weights.h"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(header)
     print(f"Escrito: {out_path}")
