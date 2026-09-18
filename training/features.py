@@ -1,5 +1,6 @@
 import numpy as np
-import librosa
+
+from training.dsp import compute_centroid_from_magnitudes, compute_frame_magnitudes, compute_mfcc_from_magnitudes
 
 SR = 16000
 N_MFCC = 11
@@ -11,8 +12,10 @@ def compute_rms(signal: np.ndarray) -> float:
 
 
 def compute_zero_crossing_rate(signal: np.ndarray) -> float:
-    zcr = librosa.feature.zero_crossing_rate(y=signal)
-    return float(np.mean(zcr))
+    signs = np.sign(signal)
+    signs[signs == 0] = 1
+    crossings = np.sum(signs[1:] != signs[:-1])
+    return float(crossings) / len(signal)
 
 
 def normalize_amplitude(signal: np.ndarray, target_peak: float = 0.5) -> np.ndarray:
@@ -27,19 +30,22 @@ def normalize_amplitude(signal: np.ndarray, target_peak: float = 0.5) -> np.ndar
 
 
 def compute_spectral_centroid(signal: np.ndarray, sr: int = SR) -> float:
-    centroid = librosa.feature.spectral_centroid(y=signal, sr=sr)
-    return float(np.mean(centroid))
+    magnitudes = compute_frame_magnitudes(signal)
+    return compute_centroid_from_magnitudes(magnitudes, sr=sr)
 
 
 def compute_mfcc_means(signal: np.ndarray, sr: int = SR, n_mfcc: int = N_MFCC) -> np.ndarray:
-    mfcc = librosa.feature.mfcc(y=signal, sr=sr, n_mfcc=n_mfcc)
-    return np.mean(mfcc, axis=1)
+    magnitudes = compute_frame_magnitudes(signal)
+    return compute_mfcc_from_magnitudes(magnitudes, n_mfcc=n_mfcc)
 
 
 def extract_features(signal: np.ndarray, sr: int = SR) -> np.ndarray:
     rms = compute_rms(signal)
     zcr = compute_zero_crossing_rate(signal)
     shape_signal = normalize_amplitude(signal)
-    centroid = compute_spectral_centroid(shape_signal, sr)
-    mfcc_means = compute_mfcc_means(shape_signal, sr)
+
+    magnitudes = compute_frame_magnitudes(shape_signal)
+    centroid = compute_centroid_from_magnitudes(magnitudes, sr=sr)
+    mfcc_means = compute_mfcc_from_magnitudes(magnitudes, n_mfcc=N_MFCC)
+
     return np.concatenate([[rms], [zcr], [centroid], mfcc_means]).astype(np.float32)
