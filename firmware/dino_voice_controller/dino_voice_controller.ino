@@ -14,6 +14,8 @@
 // registro de latência (único recurso realmente compartilhado por todas
 // as tasks, fora das filas).
 
+#include <math.h>
+
 #include <driver/i2s.h>
 #include <ESP32Servo.h>
 
@@ -48,6 +50,15 @@
 
 #define CONFIDENCE_THRESHOLD 0.6f
 #define COMMAND_COOLDOWN_MS 800
+
+// Piso mínimo de RMS pra sequer considerar um comando — calibrado a partir
+// do ruído ambiente no setup(). Sem isso, silêncio/ruído de fundo pode ser
+// classificado com confiança alta pra uma classe errada (o modelo nunca viu
+// silêncio digital "perfeito" no treino, e extrapola mal fora da
+// distribuição — mesmo problema encontrado e corrigido no live_test.py).
+#define MIN_RMS_MULTIPLIER 3.0f
+#define MIN_RMS_FLOOR 0.01f
+static float g_minRms = MIN_RMS_FLOOR;
 
 // ---------------------------------------------------------------------------
 // Mensagens entre tasks
@@ -124,6 +135,33 @@ void i2sInstall() {
   i2s_start(I2S_PORT);
 }
 
+// Mede o ruído ambiente por ~1s (bloqueante, roda no setup() antes das
+// tasks existirem) e calibra o piso mínimo de RMS pra considerar um comando.
+void calibrateAmbientRms() {
+  Serial.println("Calibrando ruido de fundo - fique em silencio por 1s...");
+
+  static int32_t rawSamples[I2S_READ_CHUNK_SAMPLES];
+  double sumSquares = 0.0;
+  int totalSamples = 0;
+
+  while (totalSamples < DSP_CLIP_LENGTH) {
+    size_t bytesRead = 0;
+    i2s_read(I2S_PORT, rawSamples, sizeof(rawSamples), &bytesRead, portMAX_DELAY);
+    int samplesRead = bytesRead / sizeof(int32_t);
+
+    for (int i = 0; i < samplesRead && totalSamples < DSP_CLIP_LENGTH; i++) {
+      int16_t sample16 = (int16_t)(rawSamples[i] >> I2S_SAMPLE_SHIFT);
+      float sample = (float)sample16 / 32768.0f;
+      sumSquares += (double)sample * (double)sample;
+      totalSamples++;
+    }
+  }
+
+  float ambientRms = sqrtf((float)(sumSquares / totalSamples));
+  g_minRms = fmaxf(ambientRms * MIN_RMS_MULTIPLIER, MIN_RMS_FLOOR);
+  Serial.printf("Ruido ambiente: %.4f | Piso minimo para classificar: %.4f\n", ambientRms, g_minRms);
+}
+
 void audioCaptureTask(void *pvParameters) {
   static int32_t rawSamples[I2S_READ_CHUNK_SAMPLES];
   int activeIndex = 0;
@@ -197,8 +235,9 @@ void detectionTask(void *pvParameters) {
     modelSoftmax(logits, probabilities);
 
     int predicted = modelArgmax(probabilities);
+    bool tooQuiet = featuresMsg.features[0] < g_minRms;  // features[0] = RMS
     bool confident = probabilities[predicted] >= CONFIDENCE_THRESHOLD;
-    bool isCommand = confident && predicted != CLASS_RUIDO;
+    bool isCommand = !tooQuiet && confident && predicted != CLASS_RUIDO;
 
     uint32_t nowMs = millis();
     bool cooldownExpired = (nowMs - lastCommandMs) >= COMMAND_COOLDOWN_MS;
@@ -288,6 +327,7 @@ void setup() {
   servoAbaixa.write(SERVO_RELEASED_ANGLE);
 
   i2sInstall();
+  calibrateAmbientRms();
 
   audioQueue = xQueueCreate(2, sizeof(AudioBufferMsg));
   featuresQueue = xQueueCreate(2, sizeof(FeaturesMsg));
