@@ -210,6 +210,14 @@ void detectionTask(void *pvParameters) {
     bool confident = probabilities[predicted] >= CONFIDENCE_THRESHOLD;
     bool isCommand = confident && predicted != CLASS_RUIDO;
 
+    // DEBUG temporario — remover depois de diagnosticar o disparo falso em
+    // silencio. Mostra RMS/ZCR (features[0]/[1]) e as 3 probabilidades em
+    // toda janela, nao so quando um comando dispara.
+    Serial.printf(
+        "DEBUG rms=%.4f zcr=%.4f probs=[ruido=%.3f pular=%.3f abaixa=%.3f]\n",
+        featuresMsg.features[0], featuresMsg.features[1], probabilities[0],
+        probabilities[1], probabilities[2]);
+
     uint32_t nowMs = millis();
     bool cooldownExpired = (nowMs - lastCommandMs) >= COMMAND_COOLDOWN_MS;
 
