@@ -48,16 +48,16 @@
 // mesma convenção dos .wav do dataset de treino (ver feature_extraction.cpp).
 #define I2S_SAMPLE_SHIFT 16
 
-#define CONFIDENCE_THRESHOLD 0.6f
+#define CONFIDENCE_THRESHOLD 0.75f
 #define COMMAND_COOLDOWN_MS 800
 
-// TODO: piso mínimo de RMS calibrado (protege contra silêncio/ruído sendo
-// classificado com confiança alta pra uma classe errada) foi removido
-// temporariamente — a calibração mediu 0.3281 de "ruído ambiente" num
-// teste real, o que é muito alto pra ser silêncio de verdade e deixou o
-// piso praticamente inatingível mesmo com fala real. Precisa investigar
-// a causa (fiação/config do INMP441 ou a escala usada na leitura I2S)
-// antes de reativar essa proteção.
+// Piso mínimo de RMS — FIXO, não calibrado por uma única amostra (a
+// calibração de 1s testada antes pegou um pico isolado de 0.3281 e ficou
+// inutilizável). Baseado em dados reais de bancada: RMS de ambiente/
+// silêncio observado na faixa 0.02-0.10 (log de debug), então 0.15 fica
+// com margem confortável acima disso. Ajustar se o RMS de fala real
+// nesse microfone específico ficar abaixo disso (ver DEBUG no Serial).
+#define MIN_RMS_FLOOR 0.15f
 
 // ---------------------------------------------------------------------------
 // Mensagens entre tasks
@@ -207,15 +207,16 @@ void detectionTask(void *pvParameters) {
     modelSoftmax(logits, probabilities);
 
     int predicted = modelArgmax(probabilities);
+    bool tooQuiet = featuresMsg.features[0] < MIN_RMS_FLOOR;  // features[0] = RMS
     bool confident = probabilities[predicted] >= CONFIDENCE_THRESHOLD;
-    bool isCommand = confident && predicted != CLASS_RUIDO;
+    bool isCommand = !tooQuiet && confident && predicted != CLASS_RUIDO;
 
-    // DEBUG temporario — remover depois de diagnosticar o disparo falso em
-    // silencio. Mostra RMS/ZCR (features[0]/[1]) e as 3 probabilidades em
-    // toda janela, nao so quando um comando dispara.
+    // DEBUG temporario — remover depois de confirmar que o piso de RMS
+    // resolveu o disparo falso em silencio. Mostra RMS/ZCR e as 3
+    // probabilidades em toda janela, nao so quando um comando dispara.
     Serial.printf(
-        "DEBUG rms=%.4f zcr=%.4f probs=[ruido=%.3f pular=%.3f abaixa=%.3f]\n",
-        featuresMsg.features[0], featuresMsg.features[1], probabilities[0],
+        "DEBUG rms=%.4f zcr=%.4f tooQuiet=%d probs=[ruido=%.3f pular=%.3f abaixa=%.3f]\n",
+        featuresMsg.features[0], featuresMsg.features[1], tooQuiet, probabilities[0],
         probabilities[1], probabilities[2]);
 
     uint32_t nowMs = millis();
