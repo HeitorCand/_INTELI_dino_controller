@@ -39,9 +39,9 @@
 // próprio par solto/pressionado porque estão montados em sentidos opostos
 // (o de "abaixa" gira pro lado contrário do de "pular").
 #define SERVO_PULAR_RELEASED_ANGLE 0
-#define SERVO_PULAR_PRESSED_ANGLE 30
+#define SERVO_PULAR_PRESSED_ANGLE 25
 #define SERVO_ABAIXA_RELEASED_ANGLE 180
-#define SERVO_ABAIXA_PRESSED_ANGLE 150
+#define SERVO_ABAIXA_PRESSED_ANGLE 155
 #define SERVO_PRESS_HOLD_MS 150
 
 #define SAMPLE_RATE 16000
