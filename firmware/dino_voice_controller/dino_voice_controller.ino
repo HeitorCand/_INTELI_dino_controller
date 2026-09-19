@@ -53,11 +53,11 @@
 
 // Piso mínimo de RMS — FIXO, não calibrado por uma única amostra (a
 // calibração de 1s testada antes pegou um pico isolado de 0.3281 e ficou
-// inutilizável). Baseado em dados reais de bancada: RMS de ambiente/
-// silêncio observado na faixa 0.02-0.10 (log de debug), então 0.15 fica
-// com margem confortável acima disso. Ajustar se o RMS de fala real
-// nesse microfone específico ficar abaixo disso (ver DEBUG no Serial).
-#define MIN_RMS_FLOOR 0.15f
+// inutilizável). ATENÇÃO: a margem entre ruído ambiente (~0.02-0.10) e
+// fala real medida em bancada (~0.10) é estreita — fale alto e perto do
+// microfone pra ficar bem acima do piso. Reajustar aqui se necessário
+// depois de medir com o DEBUG no Serial.
+#define MIN_RMS_FLOOR 0.09f
 
 // ---------------------------------------------------------------------------
 // Mensagens entre tasks
