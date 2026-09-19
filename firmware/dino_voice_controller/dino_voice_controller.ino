@@ -36,9 +36,10 @@
 #define BUZZER_PIN 26
 
 // Ângulos do servo — CALIBRAR na montagem física real (0 = solto,
-// SERVO_PRESSED_ANGLE = braço pressionando a tecla).
+// SERVO_PRESSED_ANGLE = braço pressionando a tecla). Curso reduzido: pra
+// apertar uma tecla não precisa de um quarto de volta inteiro.
 #define SERVO_RELEASED_ANGLE 0
-#define SERVO_PRESSED_ANGLE 90
+#define SERVO_PRESSED_ANGLE 30
 #define SERVO_PRESS_HOLD_MS 150
 
 #define SAMPLE_RATE 16000
