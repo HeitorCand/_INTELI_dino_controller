@@ -1,4 +1,6 @@
 training/data/raw/
+training/data/raw_archive_mixed_sources/
+training/data/raw_archive_portuguese/
 training/data/esp32_raw/
 .venv/
 .superpowers

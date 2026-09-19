@@ -1,5 +1,7 @@
-// Detector de comandos de voz "pular"/"abaixa" para controlar o jogo do
+// Detector de comandos de voz "up"/"down" para controlar o jogo do
 // dinossauro do Chrome via servos, no ESP32 + microfone INMP441.
+// (nomes internos das classes/pinos continuam "pular"/"abaixa" — representam
+// a AÇÃO do jogo, pular=jump / abaixa=duck; só a palavra falada mudou.)
 //
 // Arquitetura (4 tasks FreeRTOS, ver
 // docs/superpowers/specs/2026-09-16-dino-voice-controller-design.md):
@@ -332,7 +334,7 @@ void setup() {
   xTaskCreate(detectionTask, "deteccao", 4096, NULL, 1, NULL);
   xTaskCreate(actuationTask, "atuacao", 4096, NULL, 1, NULL);
 
-  Serial.println("Sistema iniciado. Fale 'pular' ou 'abaixa'.");
+  Serial.println("Sistema iniciado. Fale 'up' (pular) ou 'down' (abaixar).");
 }
 
 void loop() {
