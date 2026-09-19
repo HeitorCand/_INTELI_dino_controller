@@ -10,7 +10,7 @@ o resultado final.
 
 ---
 
-## 16/09/2026 - Definindo a ideia e montando o pipeline de treino
+## Definindo a ideia e montando o pipeline de treino
 
 Li o enunciado da ponderada e decidi fugir um pouco dos exemplos dados
 (queda, grito, latido). A ideia: detectar os comandos de voz "pular" e
@@ -43,14 +43,14 @@ Com o modelo treinado sem seed fixa, a acuracia variava bastante entre
 execucoes (0.77 a 0.92) so por causa da inicializacao aleatoria dos pesos -
 adicionei `torch.manual_seed(42)` pra tornar o treino reprodutivel.
 
-Ao longo do dia fui adicionando mais dados (incluindo trechos de conversa
-longa mencionando "pular"/"abaixa" de propositivo, como exemplos dificeis
-pra ensinar o modelo a nao disparar so por ouvir a palavra dentro de uma
-frase) e testando ao vivo pelo microfone do notebook (`live_test.py`).
-Resultado do dia: acuracia foi subindo aos poucos, de 73% para 83%,
-conforme o dataset crescia e ficava mais limpo.
+Fui adicionando mais dados aos poucos (incluindo trechos de conversa longa
+mencionando "pular"/"abaixa" de proposito, como exemplos dificeis pra
+ensinar o modelo a nao disparar so por ouvir a palavra dentro de uma frase)
+e testando ao vivo pelo microfone do notebook (`live_test.py`). A acuracia
+foi subindo aos poucos, de 73% para 83%, conforme o dataset crescia e
+ficava mais limpo.
 
-## 17/09/2026 - Descasamento de microfone e mais dados
+## Descasamento de microfone: o problema central do projeto
 
 Comecei a notar um problema recorrente: o modelo treinado com audio do
 iPhone e do notebook, quando testado ao vivo, tinha um vies forte para uma
@@ -74,7 +74,7 @@ segmentacao) - o dataset era pequeno demais pra sustentar mais dimensoes.
 Revertido. Ja adicionar zero-crossing rate como feature isolada ajudou
 (83%) - a licao foi testar uma mudanca de cada vez, nao empilhar varias.
 
-## 18/09/2026 - Comecando o firmware, e o retorno do problema de microfone
+## Comecando o firmware
 
 Criei a pinagem do ESP32 + INMP441 (I2S) e dos servos, e escrevi um sketch
 de teste isolado do microfone (`i2s_mic_test.ino`) antes de montar a
@@ -93,12 +93,14 @@ Depois portei o pipeline inteiro pra C:
   float para int16 (padrao PCM, metade do tamanho) e eliminando uma copia
   intermediaria de 64KB que nao era necessaria.
 
-Com o firmware rodando de verdade no hardware, o mesmo vies de microfone
-apareceu de novo, agora entre notebook/iPhone (treino) e o INMP441 real
-(uso) - o problema nao tinha sido resolvido, so mudado de lugar. Construi
-um caminho pra gravar dados direto pelo ESP32 (`esp32_record.ino` +
-`record_from_esp32.py`, comunicacao via Serial) e comecei a substituir
-parte do dataset por gravacoes reais do hardware final.
+## O descasamento de microfone volta, agora no hardware real
+
+Com o firmware rodando de verdade, o mesmo vies apareceu de novo, agora
+entre notebook/iPhone (treino) e o INMP441 real (uso) - o problema nao
+tinha sido resolvido, so mudado de lugar. Construi um caminho pra gravar
+dados direto pelo ESP32 (`esp32_record.ino` + `record_from_esp32.py`,
+comunicacao via Serial) e comecei a substituir parte do dataset por
+gravacoes reais do hardware final.
 
 Tambem apareceram bugs de hardware: o servo nao se movia porque estava
 ligado direto no pino de alimentacao do ESP32 (corrente insuficiente -
@@ -106,17 +108,19 @@ precisa de fonte externa de 5V), e o `live_test.py` chegou a classificar
 silencio digital puro como comando com 99% de confianca (o modelo nunca viu
 esse caso extremo no treino).
 
-## 19/09/2026 - Limpeza de dados, experimento em ingles, e ajuste fino
+## Limpeza de dados e o experimento decisivo
 
 Uma auditoria completa do dataset com Whisper revelou que boa parte dos
 dados do MSWC estava mal alinhada (a palavra transcrita nao era a real, ou
 o audio so tinha ruido) - removi cerca de 50 clipes contaminados.
 
-Fiz um experimento controlado: treinar e testar usando *so* dados gravados
-pelo proprio ESP32 (sem misturar iPhone/notebook/MSWC). Resultado: "pular"
-chegou a 100% de precisao - confirmou que o descasamento de microfone era
-mesmo a causa principal do problema, nao um erro de modelo. Adotei esse
-dataset (142 clipes, so do ESP32) como o oficial.
+Fiz entao um experimento controlado: treinar e testar usando *so* dados
+gravados pelo proprio ESP32 (sem misturar iPhone/notebook/MSWC). Resultado:
+"pular" chegou a 100% de precisao - confirmou que o descasamento de
+microfone era mesmo a causa principal do problema, nao um erro de modelo.
+Adotei esse dataset (142 clipes, so do ESP32) como o oficial.
+
+## Um desvio: testando em ingles
 
 Testei tambem um experimento em ingles com o Google Speech Commands
 ("up"/"down"), um dataset publico feito especificamente pra esse tipo de
@@ -126,10 +130,12 @@ trocar o projeto pra usar "up"/"down", mas decidimos voltar pro portugues
 ("pular"/"abaixa") gravado no ESP32, priorizando manter o projeto no
 idioma original.
 
-Ajustei os parametros fisicos dos servos (angulo de giro, tempo que ficam
-pressionados, direcao de rotacao de cada um) direto testando na bancada,
-ate o movimento ficar adequado pra apertar as teclas sem forcar demais o
-mecanismo.
+## Ajuste fino no hardware
+
+Por fim, ajustei os parametros fisicos dos servos (angulo de giro, tempo
+que ficam pressionados, direcao de rotacao de cada um) direto testando na
+bancada, ate o movimento ficar adequado pra apertar as teclas sem forcar
+demais o mecanismo.
 
 ## Estado atual do sistema
 
