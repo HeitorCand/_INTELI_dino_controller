@@ -45,7 +45,7 @@
 #define SERVO_ABAIXA_PRESSED_ANGLE 30
 // Tempo que o braço fica pressionado antes de soltar.
 #define SERVO_PULAR_PRESS_HOLD_MS 300
-#define SERVO_ABAIXA_PRESS_HOLD_MS 300
+#define SERVO_ABAIXA_PRESS_HOLD_MS 1000
 
 #define SAMPLE_RATE 16000
 #define I2S_READ_CHUNK_SAMPLES 512
