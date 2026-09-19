@@ -35,14 +35,14 @@
 #define LED_PIN 25
 #define BUZZER_PIN 26
 
-// Ângulos do servo — CALIBRAR na montagem física real. Mesma faixa de 0-25°
-// pros dois, mas o de "abaixa" percorre ela no sentido contrário (solto em
-// 25, pressiona indo pra 0) porque está montado espelhado em relação ao
-// de "pular" (solto em 0, pressiona indo pra 25).
+// Ângulos do servo — CALIBRAR na montagem física real. Mesma lógica pros
+// dois (solto em 0, pressiona indo pra 30) — a montagem física do servo de
+// "abaixa" foi invertida no hardware, então não precisa mais inverter no
+// software.
 #define SERVO_PULAR_RELEASED_ANGLE 0
-#define SERVO_PULAR_PRESSED_ANGLE 29
-#define SERVO_ABAIXA_RELEASED_ANGLE 29
-#define SERVO_ABAIXA_PRESSED_ANGLE 0
+#define SERVO_PULAR_PRESSED_ANGLE 30
+#define SERVO_ABAIXA_RELEASED_ANGLE 0
+#define SERVO_ABAIXA_PRESSED_ANGLE 30
 #define SERVO_PRESS_HOLD_MS 150
 
 #define SAMPLE_RATE 16000
