@@ -40,7 +40,7 @@
 // "abaixa" foi invertida no hardware, então não precisa mais inverter no
 // software.
 #define SERVO_PULAR_RELEASED_ANGLE 0
-#define SERVO_PULAR_PRESSED_ANGLE 33
+#define SERVO_PULAR_PRESSED_ANGLE 34
 #define SERVO_ABAIXA_RELEASED_ANGLE 0
 #define SERVO_ABAIXA_PRESSED_ANGLE 27
 // Tempo que o braço fica pressionado antes de soltar.
