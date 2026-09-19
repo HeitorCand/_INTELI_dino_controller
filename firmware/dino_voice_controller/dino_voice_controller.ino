@@ -43,7 +43,9 @@
 #define SERVO_PULAR_PRESSED_ANGLE 32
 #define SERVO_ABAIXA_RELEASED_ANGLE 0
 #define SERVO_ABAIXA_PRESSED_ANGLE 30
-#define SERVO_PRESS_HOLD_MS 150
+// Tempo que o braço fica pressionado antes de soltar.
+#define SERVO_PULAR_PRESS_HOLD_MS 300
+#define SERVO_ABAIXA_PRESS_HOLD_MS 300
 
 #define SAMPLE_RATE 16000
 #define I2S_READ_CHUNK_SAMPLES 512
@@ -256,9 +258,9 @@ void alert() {
   digitalWrite(BUZZER_PIN, LOW);
 }
 
-void pressServo(Servo &servo, int releasedAngle, int pressedAngle) {
+void pressServo(Servo &servo, int releasedAngle, int pressedAngle, int holdMs) {
   servo.write(pressedAngle);
-  delay(SERVO_PRESS_HOLD_MS);
+  delay(holdMs);
   servo.write(releasedAngle);
 }
 
@@ -270,9 +272,11 @@ void actuationTask(void *pvParameters) {
 
     alert();
     if (commandMsg.predictedClass == CLASS_PULAR) {
-      pressServo(servoPular, SERVO_PULAR_RELEASED_ANGLE, SERVO_PULAR_PRESSED_ANGLE);
+      pressServo(servoPular, SERVO_PULAR_RELEASED_ANGLE, SERVO_PULAR_PRESSED_ANGLE,
+                 SERVO_PULAR_PRESS_HOLD_MS);
     } else if (commandMsg.predictedClass == CLASS_ABAIXA) {
-      pressServo(servoAbaixa, SERVO_ABAIXA_RELEASED_ANGLE, SERVO_ABAIXA_PRESSED_ANGLE);
+      pressServo(servoAbaixa, SERVO_ABAIXA_RELEASED_ANGLE, SERVO_ABAIXA_PRESSED_ANGLE,
+                 SERVO_ABAIXA_PRESS_HOLD_MS);
     }
 
     uint32_t actuationDoneUs = micros();
