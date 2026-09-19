@@ -57,7 +57,7 @@
 // fala real medida em bancada (~0.10) é estreita — fale alto e perto do
 // microfone pra ficar bem acima do piso. Reajustar aqui se necessário
 // depois de medir com o DEBUG no Serial.
-#define MIN_RMS_FLOOR 0.09f
+#define MIN_RMS_FLOOR 0.07f
 
 // ---------------------------------------------------------------------------
 // Mensagens entre tasks
