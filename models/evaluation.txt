@@ -1,15 +1,15 @@
               precision    recall  f1-score   support
 
-       ruido       0.93      0.93      0.93        15
-       pular       0.81      0.81      0.81        27
-      abaixa       0.76      0.76      0.76        25
+       ruido       0.87      0.93      0.90        14
+       pular       0.70      0.70      0.70        20
+      abaixa       0.63      0.60      0.62        20
 
-    accuracy                           0.82        67
-   macro avg       0.84      0.84      0.84        67
-weighted avg       0.82      0.82      0.82        67
+    accuracy                           0.72        54
+   macro avg       0.73      0.74      0.74        54
+weighted avg       0.72      0.72      0.72        54
 
 
 Confusion matrix (rows=true, cols=pred), order ['ruido', 'pular', 'abaixa']:
-[[14  0  1]
- [ 0 22  5]
- [ 1  5 19]]
+[[13  0  1]
+ [ 0 14  6]
+ [ 2  6 12]]
