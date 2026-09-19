@@ -66,7 +66,11 @@ def main():
     time.sleep(2)  # espera o ESP32 reiniciar após abrir a porta serial
     ser.reset_input_buffer()
 
-    raw_dir = Path(__file__).parent / "data" / "raw"
+    # Grava numa pasta separada (não direto em data/raw/) para permitir
+    # revisar/testar a qualidade antes de misturar no dataset oficial de
+    # treino — útil dado quanto lixo/contaminação já apareceu em lotes
+    # anteriores que foram direto pro dataset.
+    raw_dir = Path(__file__).parent / "data" / "esp32_raw"
     for class_name in CLASSES:
         class_dir = raw_dir / class_name
         print(f"\n=== Classe '{class_name}' (gravando pelo ESP32) ===")
