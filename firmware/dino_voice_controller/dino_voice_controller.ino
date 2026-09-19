@@ -35,11 +35,13 @@
 #define LED_PIN 25
 #define BUZZER_PIN 26
 
-// Ângulos do servo — CALIBRAR na montagem física real (0 = solto,
-// SERVO_PRESSED_ANGLE = braço pressionando a tecla). Curso reduzido: pra
-// apertar uma tecla não precisa de um quarto de volta inteiro.
-#define SERVO_RELEASED_ANGLE 0
-#define SERVO_PRESSED_ANGLE 30
+// Ângulos do servo — CALIBRAR na montagem física real. Cada servo tem seu
+// próprio par solto/pressionado porque estão montados em sentidos opostos
+// (o de "abaixa" gira pro lado contrário do de "pular").
+#define SERVO_PULAR_RELEASED_ANGLE 0
+#define SERVO_PULAR_PRESSED_ANGLE 30
+#define SERVO_ABAIXA_RELEASED_ANGLE 180
+#define SERVO_ABAIXA_PRESSED_ANGLE 150
 #define SERVO_PRESS_HOLD_MS 150
 
 #define SAMPLE_RATE 16000
@@ -253,10 +255,10 @@ void alert() {
   digitalWrite(BUZZER_PIN, LOW);
 }
 
-void pressServo(Servo &servo) {
-  servo.write(SERVO_PRESSED_ANGLE);
+void pressServo(Servo &servo, int releasedAngle, int pressedAngle) {
+  servo.write(pressedAngle);
   delay(SERVO_PRESS_HOLD_MS);
-  servo.write(SERVO_RELEASED_ANGLE);
+  servo.write(releasedAngle);
 }
 
 void actuationTask(void *pvParameters) {
@@ -267,9 +269,9 @@ void actuationTask(void *pvParameters) {
 
     alert();
     if (commandMsg.predictedClass == CLASS_PULAR) {
-      pressServo(servoPular);
+      pressServo(servoPular, SERVO_PULAR_RELEASED_ANGLE, SERVO_PULAR_PRESSED_ANGLE);
     } else if (commandMsg.predictedClass == CLASS_ABAIXA) {
-      pressServo(servoAbaixa);
+      pressServo(servoAbaixa, SERVO_ABAIXA_RELEASED_ANGLE, SERVO_ABAIXA_PRESSED_ANGLE);
     }
 
     uint32_t actuationDoneUs = micros();
@@ -304,8 +306,8 @@ void setup() {
 
   servoPular.attach(SERVO_PULAR_PIN);
   servoAbaixa.attach(SERVO_ABAIXA_PIN);
-  servoPular.write(SERVO_RELEASED_ANGLE);
-  servoAbaixa.write(SERVO_RELEASED_ANGLE);
+  servoPular.write(SERVO_PULAR_RELEASED_ANGLE);
+  servoAbaixa.write(SERVO_ABAIXA_RELEASED_ANGLE);
 
   i2sInstall();
 
