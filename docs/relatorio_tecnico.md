@@ -1,145 +1,146 @@
-# Relatorio Tecnico - Detector de Anomalias Acusticas
+# Diario de Bordo - Detector de Anomalias Acusticas
 
-**Projeto:** Controle por voz do jogo do dinossauro do Chrome, usando ESP32 +
-INMP441 + FreeRTOS + servos.
+**Projeto:** controle por voz do jogo do dinossauro do Chrome, usando ESP32 +
+INMP441 + FreeRTOS + servos. Comandos: "pular" e "abaixa", mais uma classe
+de rejeicao ("ruido": silencio, ruido de fundo, outras falas).
 
-**Padrao acustico escolhido:** dois comandos de voz, "pular" e "abaixa", mais
-uma classe de rejeicao ("ruido": silencio, ruido de fundo, outras falas).
-Aplicacao pratica: controle de jogo sem uso das maos.
+Este documento registra o desenvolvimento na ordem em que ele aconteceu,
+incluindo os erros e retrabalhos - a ideia e mostrar o processo real, nao so
+o resultado final.
 
 ---
 
-## 1. Objetivo e justificativa
+## 16/09/2026 - Definindo a ideia e montando o pipeline de treino
 
-O sistema detecta em tempo real, a partir do audio capturado por um
-microfone I2S (INMP441), se a pessoa disse "pular", "abaixa" ou nenhuma das
-duas coisas (ruido), e aciona um servo motor que aperta fisicamente a tecla
-correspondente do jogo do dinossauro do Chrome. A escolha de comandos de voz
-como "anomalia acustica de interesse" foi feita pensando em uma aplicacao de
-acessibilidade: controlar um jogo (ou, de forma mais geral, qualquer
-dispositivo) sem precisar usar as maos.
+Li o enunciado da ponderada e decidi fugir um pouco dos exemplos dados
+(queda, grito, latido). A ideia: detectar os comandos de voz "pular" e
+"abaixa" para controlar o jogo do dinossauro do Chrome com um servo motor
+apertando o teclado - uma aplicacao de acessibilidade (controlar algo sem
+usar as maos).
 
-## 2. Arquitetura RTOS
+Defini a arquitetura de 4 tasks FreeRTOS (captura, extracao de features,
+deteccao, atuacao) e comecei pelo pipeline de treino em Python, com TDD:
+`features.py` (RMS, centroide espectral, MFCC via librosa), `augment.py`
+(ruido, pitch shift, time stretch), `dataset.py`, `train.py` (MLP pequeno,
+exportacao para ONNX).
 
-A arquitetura completa (4 tasks, filas, semaforos e mutex) esta detalhada em
-[`diagrama_rtos.md`](diagrama_rtos.md) e [`diagrama_rtos.svg`](diagrama_rtos.svg).
-Resumo:
+Gravei os primeiros audios pelo Voice Memo do iPhone e rotulei com apoio de
+transcricao automatica (Whisper), ja que os nomes dos arquivos eram
+gerados automaticamente por localizacao, sem indicar a classe.
 
-- **Task 1 - Captura de Audio** (prioridade alta): le o microfone via I2S
-  continuamente e preenche um buffer duplo (`bufferA`/`bufferB`, amostras
-  PCM int16 de 16 bits). Dois semaforos binarios garantem que um buffer só
-  seja reaproveitado depois que a Task 2 terminar de le-lo.
-- **Task 2 - Extracao de Features** (prioridade media): recebe o buffer
-  cheio por fila, calcula RMS, Zero-Crossing Rate, Centroide Espectral e 11
-  coeficientes MFCC (FFT propria de 512 pontos, ver secao 3), e envia o
-  vetor de 14 features por outra fila.
-- **Task 3 - Deteccao** (prioridade baixa): roda o forward-pass da rede
-  neural treinada, aplica um limiar de confianca e um piso minimo de RMS
-  (para rejeitar silencio/ruido de baixa energia), alem de um cooldown de
-  800ms entre comandos aceitos.
-- **Task 4 - Atuacao** (prioridade baixa): aciona o servo correspondente
-  (pular ou abaixa) e pisca o LED / aciona o buzzer como alerta.
+**Primeiro bug serio:** o `dataset.py` fazia o split treino/teste *depois*
+de aplicar augmentacao, entao clipes aumentados do mesmo audio original
+podiam cair tanto no treino quanto no teste - a acuracia relatada estava
+inflada por vazamento de dados. Corrigido separando por clipe bruto antes
+de aumentar.
 
-O unico recurso compartilhado fora do fluxo normal das filas e o registro de
-latencia (`LatencyLog`), protegido por um mutex, ja que mais de uma task
-escreve nele.
+**Segundo bug:** `record_audio.py` calculava o proximo indice de arquivo
+contando quantos arquivos existiam, em vez do maior indice + 1. Se alguem
+apagasse uma gravacao ruim no meio, a proxima gravacao sobrescrevia um
+arquivo bom sem avisar.
 
-## 3. Pipeline de deteccao (features + modelo)
+Com o modelo treinado sem seed fixa, a acuracia variava bastante entre
+execucoes (0.77 a 0.92) so por causa da inicializacao aleatoria dos pesos -
+adicionei `torch.manual_seed(42)` pra tornar o treino reprodutivel.
 
-### 3.1 Extracao de features
+Ao longo do dia fui adicionando mais dados (incluindo trechos de conversa
+longa mencionando "pular"/"abaixa" de propositivo, como exemplos dificeis
+pra ensinar o modelo a nao disparar so por ouvir a palavra dentro de uma
+frase) e testando ao vivo pelo microfone do notebook (`live_test.py`).
+Resultado do dia: acuracia foi subindo aos poucos, de 73% para 83%,
+conforme o dataset crescia e ficava mais limpo.
 
-Em vez de usar os parametros padrao do `librosa` (FFT de 2048 pontos, 128
-bandas mel), foi implementada uma FFT radix-2 propria em C (512 pontos, 26
-bandas mel, janela de Hann) dimensionada para caber e rodar em tempo real no
-ESP32. A mesma logica foi escrita primeiro em Python
-(`training/dsp.py`) e depois portada para C
-(`firmware/dino_voice_controller/fft.cpp` e `feature_extraction.cpp`),
-verificando numericamente que as duas implementacoes batem (erro relativo na
-casa de 1e-4 a 1e-7, testado com tons puros e com clipes reais do dataset).
+## 17/09/2026 - Descasamento de microfone e mais dados
 
-Vetor de features final (14 valores): RMS, Zero-Crossing Rate, Centroide
-Espectral e 11 coeficientes MFCC. RMS e calculado sobre o sinal bruto (carrega
-informacao de volume, usada para distinguir fala de silencio); centroide e
-MFCC sao calculados sobre uma versao com o pico de amplitude normalizado, o
-que os torna invariantes ao ganho do microfone/dispositivo de gravacao.
+Comecei a notar um problema recorrente: o modelo treinado com audio do
+iPhone e do notebook, quando testado ao vivo, tinha um vies forte para uma
+das classes (quase tudo virava "pular", mesmo quando eu falava "abaixa").
+Isso e um problema classico de descasamento de dominio: o modelo aprende
+caracteristicas do microfone de treino, nao so o conteudo da fala.
 
-### 3.2 Modelo
+Tentei mitigar de varias formas:
+- Normalizar a amplitude do sinal antes de calcular centroide/MFCC (deixa
+  essas features invariantes ao ganho do microfone).
+- Aumentar a augmentacao com variacao de ganho e deslocamento temporal.
+- Buscar dados de multiplos falantes/microfones: baixei o Multilingual
+  Spoken Words Corpus (MLCommons), que extrai palavras isoladas do Mozilla
+  Common Voice por alinhamento forcado. Achei 51 clipes de "pula" e 46 de
+  "abaixo" (variante mais proxima de "abaixa" no corpus).
 
-Rede neural pequena (MLP: 14 -> 16 -> 3, ReLU + softmax), treinada em Python
-(PyTorch) e exportada em `.onnx`. Como o ESP32 nao tem um runtime ONNX
-embarcado simples, o forward-pass foi portado manualmente para C como
-produto de matrizes (`model_inference.cpp`), usando os pesos exportados de
-`models/model.onnx` (`training/export_c_model.py`). Essa porta foi verificada
-numericamente contra o modelo em Python (logits batendo em ~1e-5).
+Tambem testei engenharia de features: dividir o audio em segmentos
+temporais antes de extrair features (na esperanca de capturar a evolucao
+da palavra no tempo). Resultado: piorou a acuracia (74-77% contra 80% sem
+segmentacao) - o dataset era pequeno demais pra sustentar mais dimensoes.
+Revertido. Ja adicionar zero-crossing rate como feature isolada ajudou
+(83%) - a licao foi testar uma mudanca de cada vez, nao empilhar varias.
 
-Tamanho do modelo: 291 parametros (~1.16KB em float32) - pequeno o
-suficiente para rodar em microssegundos no ESP32, sem necessidade de
-quantizacao.
+## 18/09/2026 - Comecando o firmware, e o retorno do problema de microfone
 
-## 4. Coleta de dados e principal desafio encontrado
+Criei a pinagem do ESP32 + INMP441 (I2S) e dos servos, e escrevi um sketch
+de teste isolado do microfone (`i2s_mic_test.ino`) antes de montar a
+arquitetura completa.
 
-O maior desafio do projeto nao foi a arquitetura RTOS em si, mas conseguir
-dados de treino que generalizassem para o microfone real do dispositivo
-final (INMP441 no ESP32). O dataset passou por varias fontes ao longo do
-projeto:
+Depois portei o pipeline inteiro pra C:
+- FFT radix-2 propria (512 pontos) - librosa usa 2048 pontos e 128 bandas
+  mel por padrao, pesado demais pra rodar em tempo real num
+  microcontrolador. Reescrevi o calculo de centroide/MFCC em Python
+  (`training/dsp.py`) com parametros menores (512 pontos, 26 bandas mel) e
+  depois portei a mesma logica pra C, verificando numericamente que as duas
+  batiam (erro relativo na casa de 1e-4 a 1e-7).
+- Forward-pass da rede neural (291 parametros) como produto de matrizes.
+- Ao juntar tudo na arquitetura de 4 tasks, o firmware nao coube na RAM do
+  ESP32 (faltavam ~98KB). Resolvido trocando os buffers de captura de
+  float para int16 (padrao PCM, metade do tamanho) e eliminando uma copia
+  intermediaria de 64KB que nao era necessaria.
 
-1. Gravacoes proprias via iPhone (Voice Memos) e microfone do notebook.
-2. Dados publicos do MLCommons Multilingual Spoken Words Corpus (MSWC),
-   extraidos por alinhamento forcado do Mozilla Common Voice PT-BR
-   (CC-BY 4.0).
-3. Gravacoes feitas diretamente pelo ESP32 (script de gravacao via
-   Serial, `firmware/esp32_record/esp32_record.ino` +
-   `training/record_from_esp32.py`).
+Com o firmware rodando de verdade no hardware, o mesmo vies de microfone
+apareceu de novo, agora entre notebook/iPhone (treino) e o INMP441 real
+(uso) - o problema nao tinha sido resolvido, so mudado de lugar. Construi
+um caminho pra gravar dados direto pelo ESP32 (`esp32_record.ino` +
+`record_from_esp32.py`, comunicacao via Serial) e comecei a substituir
+parte do dataset por gravacoes reais do hardware final.
 
-Em testes ao vivo, o modelo treinado só com dados de outros microfones
-(iPhone, notebook, MSWC) apresentava um viés forte: a fala real captada pelo
-INMP441 era classificada quase sempre como a mesma classe, independente do
-que a pessoa realmente dissesse. Um experimento controlado (treinar e testar
-usando *apenas* dados gravados pelo proprio ESP32) confirmou que o problema
-era descasamento de dominio entre microfones, e nao um erro no modelo ou no
-pipeline: usando so dados do ESP32, a classe "pular" chegou a 100% de
-precisao. O modelo final foi treinado exclusivamente com dados reais do
-ESP32 (49 clipes de "pular", 43 de "abaixa", 50 de "ruido").
+Tambem apareceram bugs de hardware: o servo nao se movia porque estava
+ligado direto no pino de alimentacao do ESP32 (corrente insuficiente -
+precisa de fonte externa de 5V), e o `live_test.py` chegou a classificar
+silencio digital puro como comando com 99% de confianca (o modelo nunca viu
+esse caso extremo no treino).
 
-Outra licao tecnica relevante: uma auditoria manual (com apoio de
-transcricao automatica via Whisper) encontrou que uma parte significativa
-dos dados do MSWC estava mal alinhada (a palavra transcrita nao era a
-palavra realmente dita, ou o audio continha apenas ruido). Remover esses
-dados contaminados mudou a acuracia relatada, mas resultou em um modelo mais
-confiavel.
+## 19/09/2026 - Limpeza de dados, experimento em ingles, e ajuste fino
 
-## 5. Analise de latencia
+Uma auditoria completa do dataset com Whisper revelou que boa parte dos
+dados do MSWC estava mal alinhada (a palavra transcrita nao era a real, ou
+o audio so tinha ruido) - removi cerca de 50 clipes contaminados.
 
-Cada etapa do pipeline (captura -> features -> deteccao -> atuacao) tem seu
-tempo medido com `micros()`/`millis()` e impresso via Serial. Exemplo real
-capturado durante um teste em bancada:
+Fiz um experimento controlado: treinar e testar usando *so* dados gravados
+pelo proprio ESP32 (sem misturar iPhone/notebook/MSWC). Resultado: "pular"
+chegou a 100% de precisao - confirmou que o descasamento de microfone era
+mesmo a causa principal do problema, nao um erro de modelo. Adotei esse
+dataset (142 clipes, so do ESP32) como o oficial.
 
-```
-[PULAR] captura->features=84838us  features->deteccao=45us  deteccao->atuacao=230030us  total=314901us
-```
+Testei tambem um experimento em ingles com o Google Speech Commands
+("up"/"down"), um dataset publico feito especificamente pra esse tipo de
+tarefa: 86% de acuracia num teste de 101 amostras, bem mais robusto
+estatisticamente que qualquer coisa que consegui gravar sozinho. Cheguei a
+trocar o projeto pra usar "up"/"down", mas decidimos voltar pro portugues
+("pular"/"abaixa") gravado no ESP32, priorizando manter o projeto no
+idioma original.
 
-| Etapa | Tempo tipico | O que inclui |
-|---|---|---|
-| Captura -> Features | ~85 ms | FFT (512 pontos) + banco de filtros mel + DCT, repetido para ~61 janelas dentro do clipe de 1s |
-| Features -> Deteccao | < 1 ms | Forward-pass da rede (291 parametros) - custo desprezivel |
-| Deteccao -> Atuacao | ~230 ms a ~1080 ms (depende do comando) | Alerta (LED/buzzer, 80ms) + tempo que o servo fica pressionado (configuravel por comando, hoje 300ms para "pular" e 1000ms para "abaixa") |
+Ajustei os parametros fisicos dos servos (angulo de giro, tempo que ficam
+pressionados, direcao de rotacao de cada um) direto testando na bancada,
+ate o movimento ficar adequado pra apertar as teclas sem forcar demais o
+mecanismo.
 
-Dois pontos importantes para interpretar esses numeros:
+## Estado atual do sistema
 
-- A etapa "Deteccao -> Atuacao" e dominada por uma escolha de projeto (quanto
-  tempo o servo fica pressionado), nao por um gargalo de processamento. O
-  tempo de calculo real da deteccao (features -> deteccao) e desprezivel.
-- O maior componente de latencia *percebida* pelo usuario nao aparece nessa
-  tabela: a Task 1 so envia um buffer para processamento depois de
-  acumular 1 segundo inteiro de audio (16000 amostras a 16kHz). Ou seja, o
-  sistema so pode reagir, na pior das hipoteses, ate ~1 segundo depois do
-  inicio da fala, antes mesmo de qualquer processamento comecar.
+Arquitetura completa (ver [`diagrama_rtos.md`](diagrama_rtos.md) e
+[`diagrama_rtos.svg`](diagrama_rtos.svg)): 4 tasks FreeRTOS (captura,
+features, deteccao, atuacao), comunicando por filas, com 2 semaforos
+binarios protegendo o buffer duplo de captura e 1 mutex protegendo o
+registro de latencia.
 
-## 6. Resultados
-
-Avaliacao offline no conjunto de teste (dados reais do ESP32, separados do
-treino antes de qualquer aumento de dados, para evitar vazamento de
-informacao):
+Avaliacao offline (dataset real do ESP32, split feito antes de qualquer
+augmentacao):
 
 ```
               precision    recall  f1-score   support
@@ -160,62 +161,72 @@ ruido/pular/abaixa):
  [3 0 6]]
 ```
 
-"Pular" tem precisao de 100% nesse teste. O erro mais comum e "abaixa" sendo
-confundido com "ruido" (3 casos) - um erro relativamente seguro, ja que
-resulta em nao acionar nada, em vez de acionar o servo errado.
+Latencia medida em bancada (exemplo real de Serial):
+
+```
+[PULAR] captura->features=84838us  features->deteccao=45us  deteccao->atuacao=230030us  total=314901us
+```
+
+| Etapa | Tempo tipico | O que inclui |
+|---|---|---|
+| Captura -> Features | ~85 ms | FFT (512 pontos) + banco de filtros mel + DCT, repetido para ~61 janelas dentro do clipe de 1s |
+| Features -> Deteccao | < 1 ms | Forward-pass da rede (291 parametros) |
+| Deteccao -> Atuacao | ~230 ms a ~1080 ms | Alerta (LED/buzzer) + tempo que o servo fica pressionado (ajustavel por comando) |
+
+Importante: a Task 1 so envia um buffer pra processamento depois de
+acumular 1 segundo inteiro de audio. Isso significa que o sistema reage,
+na pior das hipoteses, ate 1 segundo depois do inicio da fala, antes mesmo
+do processamento comecar - esse e o maior componente de latencia percebida
+pelo usuario, maior que qualquer etapa de calculo.
+
+## Licoes aprendidas
+
+- Descasamento de microfone entre treino e uso real foi o problema tecnico
+  central do projeto, muito mais do que a escolha do modelo ou das
+  features. Dado real do hardware final vale mais do que dado limpo de
+  outra fonte.
+- Mudar uma variavel de cada vez (uma feature nova, um parametro) foi o que
+  permitiu entender o que realmente ajudava - empilhar varias mudancas
+  junto tornou dificil saber o que causou uma melhora ou piora.
+- Vale a pena auditar dados de datasets publicos antes de confiar neles;
+  alinhamento automatico erra mais do que parece.
+- Redes neurais pequenas sao "confiantemente erradas" fora da distribuicao
+  de treino (ex: silencio digital puro, nunca visto no treino, classificado
+  com altissima confianca). Vale ter uma camada de protecao simples (piso
+  de energia, limiar de confianca) alem do modelo em si.
+
+## Limitacoes conhecidas
+
+- Dataset final (142 clipes reais) e pequeno pra um problema de
+  reconhecimento de fala; a acuracia de 83% tem bastante variancia dado o
+  tamanho do conjunto de teste (29 amostras).
+- A separacao entre fala e ruido de fundo depende de um piso de RMS fixo,
+  calibrado manualmente em bancada; pode precisar de reajuste em outro
+  ambiente.
+- "Pular" e "abaixa" ainda se confundem com alguma frequencia quando a fala
+  e mais rapida ou mais baixa.
+
+## Estrutura do repositorio
+
+- `firmware/` - codigo do ESP32 (Arduino): sketch principal
+  (`dino_voice_controller/`), teste isolado de microfone (`i2s_mic_test/`)
+  e utilitario de gravacao de dados (`esp32_record/`).
+- `training/` - pipeline de treino em Python (features, augmentacao,
+  treino, exportacao para ONNX e para C), com testes automatizados.
+- `models/` - modelo treinado (`model.onnx`), estatisticas de normalizacao
+  e relatorio de avaliacao.
+- `docs/` - este diario, o diagrama RTOS e a spec de arquitetura original.
 
 <!-- ESPACO PARA IMAGEM -->
 ### [Imagem: montagem fisica do hardware]
-*Legenda: foto do ESP32, INMP441, servos, LED e buzzer montados na bancada de
-teste.*
+*Legenda: foto do ESP32, INMP441, servos, LED e buzzer montados na bancada
+de teste.*
 
 <!-- inserir imagem aqui -->
 
-## 7. Discussao
-
-**O que funcionou bem:**
-- A separacao em 4 tasks com filas deixou o pipeline facil de depurar
-  etapa por etapa (dava pra medir e imprimir o estado em cada fronteira).
-- Portar a extracao de features "na mao" para C (em vez de depender de uma
-  biblioteca pesada) manteve o uso de memoria baixo (29% da RAM do ESP32) e
-  permitiu verificar cada etapa numericamente contra a versao em Python.
-- Gravar dados de treino diretamente pelo hardware final (em vez de confiar
-  só em gravacoes de outros microfones) foi a mudanca que mais melhorou o
-  comportamento em uso real.
-
-**Limitacoes conhecidas:**
-- O dataset final (142 clipes reais) e pequeno para um problema de
-  reconhecimento de fala, mesmo que restrito a duas palavras. A acuracia de
-  83% tem bastante variancia dado o tamanho do conjunto de teste (29
-  amostras).
-- O modelo ainda confunde "pular" e "abaixa" com alguma frequencia quando a
-  fala e mais rapida ou mais baixa.
-- A separacao entre fala e ruido de fundo depende de um piso de RMS fixo,
-  calibrado manualmente a partir de medicoes em bancada; ele pode precisar
-  de reajuste em outro ambiente (mais ou menos ruidoso) ou com outro
-  posicionamento do microfone.
-
-**Trabalho futuro:** gravar mais dados diretamente do ESP32 (o experimento
-mostrou que e o que mais compensa), e considerar normalizar a duracao/
-alinhamento da fala dentro da janela de captura.
-
-## 8. Estrutura do repositorio
-
-- `firmware/` - codigo do ESP32 (Arduino): sketch principal
-  (`dino_voice_controller/`), teste isolado de microfone (`i2s_mic_test/`) e
-  utilitario de gravacao de dados (`esp32_record/`).
-- `training/` - pipeline de treino em Python (extracao de features,
-  augmentacao, treino, exportacao para ONNX e para C), com testes
-  automatizados (`training/tests/`).
-- `models/` - modelo treinado (`model.onnx`), estatisticas de normalizacao e
-  relatorio de avaliacao.
-- `docs/` - este relatorio, o diagrama RTOS e a spec de arquitetura original.
-
-## 9. Demonstracao
-
 <!-- ESPACO PARA VIDEO -->
 ### [Video: demonstracao do sistema em funcionamento]
-*Legenda: video mostrando o comando de voz "pular"/"abaixa" acionando o jogo
-do dinossauro do Chrome em tempo real, via ESP32 + servos.*
+*Legenda: video mostrando o comando de voz "pular"/"abaixa" acionando o
+jogo do dinossauro do Chrome em tempo real, via ESP32 + servos.*
 
 <!-- inserir video aqui (arquivo ou link) -->
