@@ -95,7 +95,7 @@ def main():
     def callback(indata, frames, time_info, status):
         audio_queue.put(indata[:, 0].copy())
 
-    print("\nOuvindo... fale 'up' (pular) ou 'down' (abaixar) (Ctrl+C para sair)\n")
+    print("\nOuvindo... fale 'pular' ou 'abaixa' (Ctrl+C para sair)\n")
 
     capturing = False
     capture_chunks: List[np.ndarray] = []
