@@ -308,9 +308,13 @@ diferente do jogo.*
 *Legenda: outro angulo da montagem, mostrando os servos e o circuito
 completo na mesma foto.*
 
-<!-- ESPACO PARA VIDEO -->
-### [Video: demonstracao do sistema em funcionamento]
-*Legenda: video mostrando o comando de voz "pular"/"abaixa" acionando o
-jogo do dinossauro do Chrome em tempo real, via ESP32 + servos.*
+### Video: demonstracao do sistema em funcionamento
+
+[Assista ao video (`docs/videos/demonstracao.mp4`)](videos/demonstracao.mp4)
+
+<video src="videos/demonstracao.mp4" controls width="480"></video>
+
+*Legenda: video mostrando o jogo do dinossauro do Chrome sendo controlado
+por voz em tempo real, via ESP32 + servos.*
 
 <!-- inserir video aqui (arquivo ou link) -->
