@@ -283,11 +283,30 @@ segmentacao testada e descartada) ajudariam a separar melhor "pular" de
 
 ## 10. Demonstracao
 
-<!-- ESPACO PARA IMAGEM -->
-### [Imagem: montagem fisica do hardware]
-*Legenda: foto do ESP32, INMP441 e servos montados na bancada de teste.*
+### Montagem fisica do hardware
 
-<!-- inserir imagem aqui -->
+![Montagem completa: notebook com o jogo do dinossauro aberto, os dois servos posicionados sobre o teclado e o circuito na protoboard abaixo](images/IMG_1536.jpg)
+
+*Legenda: visao geral da bancada de teste - notebook com o jogo do
+dinossauro do Chrome aberto, os dois servos SG90 apoiados sobre o teclado
+(um proximo a barra de espaco, outro proximo a seta para baixo) e o
+circuito na protoboard, conectado por USB.*
+
+![Detalhe do circuito na protoboard: ESP32-WROOM-32U, microfone INMP441 e fiacao](images/IMG_1537.jpg)
+
+*Legenda: detalhe do circuito - modulo ESP32-WROOM-32U, microfone I2S
+INMP441 (modulo redondo) e a fiacao de sinal dos dois servos.*
+
+![Detalhe dos dois servos SG90 montados numa tira de MDF sobre o teclado](images/IMG_1538.jpg)
+
+*Legenda: os dois servos SG90 (Tower Pro) fixados numa tira de MDF apoiada
+sobre o teclado do notebook, cada um posicionado para pressionar uma tecla
+diferente do jogo.*
+
+![Outro angulo da montagem, mostrando servos e protoboard juntos](images/IMG_1539.jpg)
+
+*Legenda: outro angulo da montagem, mostrando os servos e o circuito
+completo na mesma foto.*
 
 <!-- ESPACO PARA VIDEO -->
 ### [Video: demonstracao do sistema em funcionamento]
