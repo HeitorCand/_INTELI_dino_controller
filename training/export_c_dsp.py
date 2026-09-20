@@ -31,7 +31,7 @@ def generate_header() -> str:
         f"#define DSP_N_MELS {N_MELS}",
         f"#define DSP_N_MFCC {N_MFCC}",
         f"#define DSP_N_FRAMES {n_frames}",
-        f"#define DSP_CLIP_LENGTH 16000",
+        "#define DSP_CLIP_LENGTH 16000",
         "",
         format_c_array("DSP_HANN_WINDOW", window),
         format_c_array("DSP_BIN_FREQS", bin_freqs),

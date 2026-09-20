@@ -1,9 +1,6 @@
 import re
-from pathlib import Path
 
 import numpy as np
-import onnx
-import torch
 
 from training.export_c_model import format_c_array, generate_header
 from training.train import CommandClassifier, export_onnx
@@ -47,7 +44,6 @@ def test_generate_header_weights_match_onnx_initializer_values(tmp_path):
 
     header = generate_header(tmp_path)
 
-    onnx_model = onnx.load(str(tmp_path / "model.onnx"))
     w1 = model.net[0].weight.detach().numpy().astype(np.float32).flatten()
 
     match = re.search(r"MODEL_W1\[224\] = \{([^}]+)\}", header)
