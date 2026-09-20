@@ -48,6 +48,21 @@ Pinagem usada no firmware (`firmware/dino_voice_controller/dino_voice_controller
 | Servo "abaixa" | GPIO 19 |
 | LED de alerta | GPIO 2 (LED embutido da placa) |
 
+## Dataset
+
+O dataset de audio esta versionado em `training/data/`:
+
+- `raw/` - dataset final (142 clipes), gravado direto pelo INMP441 do
+  dispositivo, o mesmo usado pelo modelo em producao.
+- `esp32_raw/` - pasta de staging com as gravacoes brutas do ESP32 antes
+  da curadoria.
+- `raw_archive_mixed_sources/` - dataset intermediario de etapas
+  anteriores do projeto (audio de iPhone/notebook + clipes derivados do
+  MLCommons Multilingual Spoken Words Corpus, CC-BY 4.0), descartado do
+  modelo final por causa do descasamento de microfone (ver
+  [`docs/diario_de_bordo.md`](docs/diario_de_bordo.md)). Mantido no repo
+  por documentar esse experimento.
+
 ## Rodando o firmware
 
 1. Abra a pasta `firmware/dino_voice_controller/` no Arduino IDE (ou use
