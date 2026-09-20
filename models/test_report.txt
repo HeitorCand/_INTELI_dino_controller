@@ -1,0 +1,26 @@
+Simulacao de deteccao de anomalias — 29 clipes de teste (dados reais do INMP441, held-out)
+
+Latencia por etapa (ms):
+  extracao de features: media=0.17  mediana=0.15  p95=0.30  max=0.39
+  inferencia do modelo: media=0.02  mediana=0.01  p95=0.07  max=0.10
+
+Relatorio de classificacao (decisao final, apos piso de RMS e limiar de confianca):
+              precision    recall  f1-score   support
+
+       ruido       0.62      1.00      0.77        10
+       pular       1.00      0.80      0.89        10
+      abaixa       1.00      0.56      0.71         9
+
+    accuracy                           0.79        29
+   macro avg       0.88      0.79      0.79        29
+weighted avg       0.87      0.79      0.79        29
+
+Matriz de confusao (linhas=real, colunas=previsto, ordem ['ruido', 'pular', 'abaixa']):
+[[10  0  0]
+ [ 2  8  0]
+ [ 4  0  5]]
+
+Metricas de deteccao de anomalia:
+  taxa de deteccao (pular+abaixa corretos / total de anomalias): 13/19 (68.4%)
+  taxa de falso positivo (ruido classificado como comando): 0/10 (0.0%)
+  clipes rejeitados pelo piso de RMS (MIN_RMS_FLOOR=0.07): 15/29
