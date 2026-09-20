@@ -177,7 +177,7 @@ Latencia medida em bancada (exemplo real de Serial):
 |---|---|---|
 | Captura -> Features | ~85 ms | FFT (512 pontos) + banco de filtros mel + DCT, repetido para ~61 janelas dentro do clipe de 1s |
 | Features -> Deteccao | < 1 ms | Forward-pass da rede (291 parametros) |
-| Deteccao -> Atuacao | ~230 ms a ~1080 ms | Alerta (LED/buzzer) + tempo que o servo fica pressionado (ajustavel por comando) |
+| Deteccao -> Atuacao | ~230 ms a ~1080 ms | Alerta (LED embutido da placa) + tempo que o servo fica pressionado (ajustavel por comando) |
 
 Importante: a Task 1 so envia um buffer pra processamento depois de
 acumular 1 segundo inteiro de audio. Isso significa que o sistema reage,
@@ -225,7 +225,7 @@ pelo usuario, maior que qualquer etapa de calculo.
 
 <!-- ESPACO PARA IMAGEM -->
 ### [Imagem: montagem fisica do hardware]
-*Legenda: foto do ESP32, INMP441, servos, LED e buzzer montados na bancada
+*Legenda: foto do ESP32, INMP441 e servos montados na bancada
 de teste.*
 
 <!-- inserir imagem aqui -->

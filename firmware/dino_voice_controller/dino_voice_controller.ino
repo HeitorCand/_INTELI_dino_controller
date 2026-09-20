@@ -6,7 +6,7 @@
 //   Task 1 (alta prioridade)  — Captura de Áudio (I2S, buffer duplo)
 //   Task 2 (prioridade média) — Extração de Features (RMS/ZCR/centroide/MFCC)
 //   Task 3 (prioridade baixa) — Detecção (forward-pass do modelo + threshold)
-//   Task 4 (prioridade baixa) — Atuação (servos + LED/buzzer)
+//   Task 4 (prioridade baixa) — Atuação (servos + LED embutido da placa)
 //
 // Sincronização: filas entre as 4 tasks (produtor/consumidor); 2 semáforos
 // binários garantem que a Task 1 nunca sobrescreve um buffer que a Task 2
@@ -32,8 +32,9 @@
 
 #define SERVO_PULAR_PIN 18
 #define SERVO_ABAIXA_PIN 19
-#define LED_PIN 25
-#define BUZZER_PIN 26
+// LED embutido da placa (a maioria dos DevKits ESP32 tem um no GPIO2) -
+// nao precisa de componente extra. Sem buzzer (nao disponivel).
+#define LED_PIN 2
 
 // Ângulos do servo — CALIBRAR na montagem física real. Mesma lógica pros
 // dois (solto em 0, pressiona indo pra 30) — a montagem física do servo de
@@ -252,10 +253,8 @@ void detectionTask(void *pvParameters) {
 // ---------------------------------------------------------------------------
 void alert() {
   digitalWrite(LED_PIN, HIGH);
-  digitalWrite(BUZZER_PIN, HIGH);
   delay(80);
   digitalWrite(LED_PIN, LOW);
-  digitalWrite(BUZZER_PIN, LOW);
 }
 
 void pressServo(Servo &servo, int releasedAngle, int pressedAngle, int holdMs) {
@@ -305,9 +304,7 @@ void setup() {
   delay(500);
 
   pinMode(LED_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
-  digitalWrite(BUZZER_PIN, LOW);
 
   servoPular.attach(SERVO_PULAR_PIN);
   servoAbaixa.attach(SERVO_ABAIXA_PIN);
