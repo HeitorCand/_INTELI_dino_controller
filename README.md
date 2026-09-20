@@ -48,6 +48,12 @@ Pinagem usada no firmware (`firmware/dino_voice_controller/dino_voice_controller
 | Servo "abaixa" | GPIO 19 |
 | LED de alerta | GPIO 2 (LED embutido da placa) |
 
+![Detalhe do circuito na protoboard: ESP32-WROOM-32U, microfone INMP441 e fiacao](docs/images/IMG_1537.jpg)
+
+*Circuito montado na protoboard: ESP32-WROOM-32U, microfone I2S INMP441 e a
+fiacao de sinal dos dois servos. Mais fotos da montagem completa (servos
+sobre o teclado) em [`docs/relatorio_tecnico.md`](docs/relatorio_tecnico.md#10-demonstracao).*
+
 ## Dataset
 
 O dataset de audio esta versionado em `training/data/`:
