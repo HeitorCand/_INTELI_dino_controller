@@ -272,6 +272,23 @@ segmentacao testada e descartada) ajudariam a separar melhor "pular" de
 - `docs/` - este relatorio, o diario de bordo, o diagrama RTOS e a spec de
   arquitetura original.
 
+### 8.1 Papel de cada arquivo em `training/`
+
+Auditoria feita sobre o pipeline final (checando quem importa quem, mais
+`pyflakes` para imports/variaveis nao usadas em todo o pacote):
+
+| Arquivo | Papel |
+|---|---|
+| `features.py`, `dsp.py`, `augment.py`, `dataset.py`, `train.py` | nucleo do pipeline de treino, usados uns pelos outros |
+| `export_c_model.py`, `export_c_dsp.py` | geram os headers `.h` consumidos pelo firmware - scripts de linha de comando |
+| `record_audio.py` | nao faz mais parte do fluxo principal (o dataset final e so do ESP32), mas `record_from_esp32.py` reaproveita a funcao `save_clip` dele - ainda e uma dependencia real, nao codigo morto |
+| `record_from_esp32.py`, `live_test.py` | utilitarios de linha de comando (`python -m training.<nome>`), nao importados por outros modulos, mas nao sao codigo morto - sao os pontos de entrada usados durante o desenvolvimento |
+
+Nenhum arquivo do pacote ficou orfao. A auditoria com `pyflakes` encontrou
+apenas dois resíduos pequenos dentro de arquivos (nao arquivos inteiros): uma
+f-string sem placeholder e uma variavel local (`onnx_model`) atribuida e
+nunca usada num teste - ambos corrigidos.
+
 ## 9. Referencias e licencas
 
 - Multilingual Spoken Words Corpus (MLCommons), licenca CC-BY 4.0,
